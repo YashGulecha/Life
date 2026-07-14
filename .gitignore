@@ -1,0 +1,33 @@
+# Secrets & Credentials
+.env
+.env.local
+.env.*.local
+.env.production
+
+# Databases (prevent SQLite commits)
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+backend/data/
+
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# Build outputs & caches
+dist/
+build/
+out/
+.gradle/
+android/app/build/
+
+# IDE files
+.vscode/
+.idea/
+*.suo
+*.sw?
+
+# OS files
+.DS_Store
+Thumbs.db
