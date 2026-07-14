@@ -30,9 +30,14 @@ client.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
+      const hasToken = !!localStorage.getItem('access_token');
       localStorage.removeItem('access_token');
       localStorage.removeItem('user_email');
-      window.location.reload();
+      
+      // Only reload to force the login screen if the user was previously logged in
+      if (hasToken) {
+        window.location.reload();
+      }
     }
     return Promise.reject(error);
   }
