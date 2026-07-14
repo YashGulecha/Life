@@ -1,24 +1,27 @@
 import React, { useEffect, useState } from 'react';
 import client from '../api/client';
 import { CommandBar } from './CommandBar';
+import { 
+  Heart, 
+  BookOpen, 
+  DollarSign, 
+  Users, 
+  BookMarked, 
+  LogOut, 
+  Activity, 
+  Calendar,
+  AlertCircle,
+  FileText,
+  Clock
+} from 'lucide-react';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip } from 'recharts';
 
 interface DashboardProps {
   onLogout: () => void;
   email: string;
 }
 
-interface TimelineItem {
-  id: string;
-  type: 'finance' | 'health' | 'academic' | 'relation' | 'note';
-  title: string;
-  description: string;
-  timestamp: Date;
-  rawDate: string;
-}
-
 export const Dashboard: React.FC<DashboardProps> = ({ onLogout, email }) => {
-  const [viewMode, setViewMode] = useState<'stream' | 'status'>('stream');
-  
   // Data States
   const [financeSummary, setFinanceSummary] = useState<any>(null);
   const [financeLogs, setFinanceLogs] = useState<any[]>([]);
@@ -32,8 +35,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, email }) => {
     try {
       const [finSumRes, finLogsRes, healthRes, relRes, acadRes, notesRes] = await Promise.all([
         client.get('/finances/summary'),
-        client.get('/finances/logs?limit=50'),
-        client.get('/health/logs?days=30'),
+        client.get('/finances/logs?limit=10'),
+        client.get('/health/logs?days=14'),
         client.get('/relations'),
         client.get('/academics/semesters'),
         client.get('/notes')
@@ -46,7 +49,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, email }) => {
       setSemesters(acadRes.data);
       setNotes(notesRes.data);
     } catch (err) {
-      console.error('Failed to fetch telemetry timeline:', err);
+      console.error('Failed to fetch dashboard data:', err);
     } finally {
       setLoading(false);
     }
@@ -56,266 +59,357 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, email }) => {
     fetchDashboardData();
   }, []);
 
-  // Format relative time helper (e.g. "2h ago", "1d ago")
-  const getRelativeTime = (dateInput: Date) => {
+  // Format relative time helper
+  const getRelativeTime = (dateStr: string | Date) => {
+    const dateInput = new Date(dateStr);
     const now = new Date();
     const diffMs = now.getTime() - dateInput.getTime();
     const diffMins = Math.floor(diffMs / (1000 * 60));
     const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-    if (diffMins < 1) return 'just now';
+    if (diffMins < 1) return 'Just now';
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHrs < 24) return `${diffHrs}h ago`;
-    if (diffDays === 1) return 'yesterday';
+    if (diffDays === 1) return 'Yesterday';
     if (diffDays < 7) return `${diffDays}d ago`;
     return dateInput.toLocaleDateString([], { month: 'short', day: 'numeric' });
   };
 
-  // Compile individual logs from all tables into a unified stream list
-  const compileTimeline = (): TimelineItem[] => {
-    const items: TimelineItem[] = [];
-
-    // 1. Finance transactions
-    financeLogs.forEach((log: any) => {
-      items.push({
-        id: `fin-${log.id}`,
-        type: 'finance',
-        title: 'FIN',
-        description: `${log.transaction_type === 'income' ? 'Received' : 'Spent'} ₹${log.amount} [${log.category}]${log.description ? ` - ${log.description}` : ''}`,
-        timestamp: new Date(log.logged_at),
-        rawDate: log.logged_at
-      });
-    });
-
-    // 2. Health logs (sleep, water, weight, energy rating)
-    healthLogs.forEach((log: any) => {
-      const midnightDate = new Date(log.log_date);
-      // Offset timezone to avoid UTC shift issues
-      midnightDate.setMinutes(midnightDate.getMinutes() + midnightDate.getTimezoneOffset());
-      
-      if (log.sleep_duration) {
-        items.push({
-          id: `hlt-sleep-${log.id}`,
-          type: 'health',
-          title: 'HLT',
-          description: `Logged sleep: ${log.sleep_duration} hours${log.notes ? ` (${log.notes})` : ''}`,
-          timestamp: midnightDate,
-          rawDate: log.log_date
-        });
-      }
-      if (log.water_intake) {
-        items.push({
-          id: `hlt-water-${log.id}`,
-          type: 'health',
-          title: 'HLT',
-          description: `Hydration level: ${log.water_intake} units logged`,
-          timestamp: midnightDate,
-          rawDate: log.log_date
-        });
-      }
-      if (log.weight) {
-        items.push({
-          id: `hlt-weight-${log.id}`,
-          type: 'health',
-          title: 'HLT',
-          description: `Recorded body weight: ${log.weight} kg`,
-          timestamp: midnightDate,
-          rawDate: log.log_date
-        });
-      }
-    });
-
-    // 3. CRM interaction logs
-    relations.forEach((rel: any) => {
-      rel.logs?.forEach((log: any) => {
-        const midnightDate = new Date(log.log_date);
-        midnightDate.setMinutes(midnightDate.getMinutes() + midnightDate.getTimezoneOffset());
-        items.push({
-          id: `crm-${log.id}`,
-          type: 'relation',
-          title: 'CRM',
-          description: `Contacted ${rel.name}${log.notes ? ` (${log.notes})` : ''}`,
-          timestamp: midnightDate,
-          rawDate: log.log_date
-        });
-      });
-    });
-
-    // 4. Academics due dates (deadlines)
-    semesters.forEach((sem: any) => {
-      sem.courses?.forEach((course: any) => {
-        course.assignments?.forEach((assign: any) => {
-          if (assign.due_date) {
-            items.push({
-              id: `acd-${assign.id}`,
-              type: 'academic',
-              title: 'ACD',
-              description: `Deadline: ${course.name} - '${assign.title}' (Status: ${assign.status})`,
-              timestamp: new Date(assign.due_date),
-              rawDate: assign.due_date
-            });
-          }
-        });
-      });
-    });
-
-    // 5. Wiki Notes updates
-    notes.forEach((note: any) => {
-      items.push({
-        id: `wik-${note.id}`,
-        type: 'note',
-        title: 'WIK',
-        description: `Note '${note.title}' updated - ${note.content ? (note.content.substring(0, 60) + (note.content.length > 60 ? '...' : '')) : 'empty'}`,
-        timestamp: new Date(note.created_at || new Date()),
-        rawDate: note.created_at || new Date().toISOString()
-      });
-    });
-
-    // Sort chronologically (latest first)
-    return items.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-  };
-
-  const timeline = compileTimeline();
   const activeSemester = semesters.find(s => s.is_active);
+
+  const chartData = [...healthLogs]
+    .reverse()
+    .slice(-7)
+    .map(log => ({
+      date: new Date(log.log_date).toLocaleDateString([], { weekday: 'short' }),
+      sleep: log.sleep_duration || 0,
+      energy: log.energy_level || 0
+    }));
 
   if (loading) {
     return (
-      <div className="term-bg" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', flexDirection: 'column', gap: '12px' }}>
-        <span style={{ color: '#565f89', fontSize: '13px' }}>initializing pulse shell console...</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', flexDirection: 'column', gap: '16px' }}>
+        <div className="pulse-glow" style={{ width: '48px', height: '48px', borderRadius: '50%', border: '4px solid var(--primary)', borderTopColor: 'transparent', animation: 'spin 1s linear infinite' }} />
+        <span style={{ fontFamily: 'var(--font-display)', color: 'var(--text-secondary)' }}>Igniting Pulse Engine...</span>
       </div>
     );
   }
 
+  // Count active todos/assignments
+  const pendingAssignments = activeSemester?.courses?.flatMap((c: any) => c.assignments).filter((a: any) => a.status === 'pending') || [];
+  
+  // Count contacts overdue for check-in
+  const overdueContactsCount = relations.filter(r => {
+    if (!r.last_contact_date) return true;
+    const days = Math.floor((new Date().getTime() - new Date(r.last_contact_date).getTime()) / (1000 * 3600 * 24));
+    return days > r.contact_interval_days;
+  }).length;
+
   return (
-    <div className="term-bg">
-      {/* Monospace Terminal Header */}
-      <div className="term-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>$</span>
-          <span>pulse_os_console_v1.2.0</span>
+    <div className="app-container">
+      
+      {/* Header bar */}
+      <header className="glass-panel" style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '16px 28px',
+        borderRadius: '20px'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'var(--primary)', boxShadow: '0 0 10px var(--primary)' }} />
+          <span style={{ fontFamily: 'var(--font-display)', fontSize: '20px', fontWeight: 800, letterSpacing: '-0.03em' }}>
+            PULSE <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>// LIFE OS</span>
+          </span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <span>user:{email}</span>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }} className="sidebar-nav">
+            Session: <span style={{ color: 'white', fontWeight: 500 }}>{email}</span>
+          </span>
           <button 
             onClick={onLogout}
             style={{
-              background: 'none',
-              border: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: 'rgba(239, 68, 68, 0.08)',
+              border: '1px solid rgba(239, 68, 68, 0.2)',
               color: '#fca5a5',
+              padding: '8px 16px',
+              borderRadius: '10px',
               cursor: 'pointer',
-              fontSize: '11px',
-              fontFamily: 'inherit',
-              padding: 0
+              fontFamily: 'var(--font-display)',
+              fontSize: '12px',
+              transition: 'var(--transition-smooth)'
             }}
           >
-            [exit]
+            <LogOut size={14} />
+            Logout
           </button>
         </div>
-      </div>
+      </header>
 
-      {/* Persistent CLI input at top */}
-      <div className="term-cli-wrapper">
-        <CommandBar onCommandExecuted={fetchDashboardData} />
-      </div>
+      {/* CLI Command Input */}
+      <CommandBar onCommandExecuted={fetchDashboardData} />
 
-      {/* Terminal Segment Selector */}
-      <div className="term-toggle-bar">
-        <button 
-          className={`term-toggle-btn ${viewMode === 'stream' ? 'active' : ''}`}
-          onClick={() => setViewMode('stream')}
-        >
-          [1] stdout_stream
-        </button>
-        <button 
-          className={`term-toggle-btn ${viewMode === 'status' ? 'active' : ''}`}
-          onClick={() => setViewMode('status')}
-        >
-          [2] sys_status_metrics
-        </button>
-      </div>
-
-      {/* Toggle Layout Mode */}
-      {viewMode === 'stream' ? (
-        /* MODE A: stdout_stream timeline */
-        <div className="term-feed">
-          {timeline.length > 0 ? (
-            timeline.map((item) => (
-              <div key={item.id} className="term-log-row">
-                <span className="term-time">{getRelativeTime(item.timestamp)}</span>
-                <span className={`term-tag tag-${item.type === 'academic' ? 'acd' : item.type === 'relation' ? 'crm' : item.type === 'note' ? 'wik' : item.type.substring(0, 3)}`}>
-                  {item.title}
-                </span>
-                <span style={{ color: '#c0caf5' }}>{item.description}</span>
-              </div>
-            ))
-          ) : (
-            <div style={{ padding: '40px 0', textAlign: 'center', color: '#565f89', fontSize: '12px' }}>
-              stdout stream empty. type commands above to write logs.
-            </div>
-          )}
+      {/* KPI Overview Widgets */}
+      <div className="compact-kpi-grid">
+        {/* Net Worth */}
+        <div className="glass-panel" style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{ background: 'var(--success-glow)', padding: '12px', borderRadius: '12px', color: 'var(--success)' }}>
+            <DollarSign size={22} />
+          </div>
+          <div>
+            <span style={{ display: 'block', fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 500 }}>NET WORTH</span>
+            <span style={{ fontSize: '20px', fontWeight: 800, fontFamily: 'var(--font-display)', color: 'white' }}>
+              ₹{financeSummary?.latest_net_worth?.toLocaleString() || '0'}
+            </span>
+          </div>
         </div>
-      ) : (
-        /* MODE B: sys_status_metrics overview */
-        <div className="term-status-section">
+
+        {/* Sleep tracker */}
+        <div className="glass-panel" style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{ background: 'var(--primary-glow)', padding: '12px', borderRadius: '12px', color: 'var(--primary)' }}>
+            <Heart size={22} />
+          </div>
+          <div>
+            <span style={{ display: 'block', fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 500 }}>LAST SLEEP</span>
+            <span style={{ fontSize: '20px', fontWeight: 800, fontFamily: 'var(--font-display)', color: 'white' }}>
+              {healthLogs[0]?.sleep_duration ? `${healthLogs[0].sleep_duration} hrs` : '—'}
+            </span>
+          </div>
+        </div>
+
+        {/* Tasks countdown */}
+        <div className="glass-panel" style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{ background: 'var(--info-glow)', padding: '12px', borderRadius: '12px', color: 'var(--info)' }}>
+            <BookOpen size={22} />
+          </div>
+          <div>
+            <span style={{ display: 'block', fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 500 }}>PENDING TASKS</span>
+            <span style={{ fontSize: '20px', fontWeight: 800, fontFamily: 'var(--font-display)', color: 'white' }}>
+              {pendingAssignments.length} Assignments
+            </span>
+          </div>
+        </div>
+
+        {/* CRM check-ins */}
+        <div className="glass-panel" style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{ background: 'var(--warning-glow)', padding: '12px', borderRadius: '12px', color: 'var(--warning)' }}>
+            <Users size={22} />
+          </div>
+          <div>
+            <span style={{ display: 'block', fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 500 }}>CRM OVERDUE</span>
+            <span style={{ fontSize: '20px', fontWeight: 800, fontFamily: 'var(--font-display)', color: overdueContactsCount > 0 ? 'var(--warning)' : 'white' }}>
+              {overdueContactsCount} People
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Grid: Left Column (Chart & Activity Log), Right Column (Milestones & CRM) */}
+      <div className="responsive-grid-main">
+        
+        {/* Left Side: Vitals Chart & Recent Timeline */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
           
-          {/* Finance metrics */}
-          <div className="term-status-block">
-            <div className="term-status-title">[FINANCE METRICS]</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px' }}>
-              <span>net worth       : ₹{financeSummary?.latest_net_worth?.toLocaleString() || '0'}</span>
-              <span>monthly inflow  : ₹{financeSummary?.monthly_income?.toLocaleString() || '0'}</span>
-              <span>monthly outflow : ₹{financeSummary?.monthly_expense?.toLocaleString() || '0'}</span>
-              <span style={{ color: 'var(--success)' }}>net savings     : ₹{financeSummary?.net_savings?.toLocaleString() || '0'}</span>
-            </div>
+          {/* Chart Panel */}
+          <div className="glass-panel" style={{ padding: '24px' }}>
+            <h3 style={{ fontSize: '16px', marginBottom: '20px', fontFamily: 'var(--font-display)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Activity size={18} style={{ color: 'var(--primary)' }} />
+              Vitals History (7-Day Overview)
+            </h3>
+            {chartData.length > 0 ? (
+              <div style={{ width: '100%', height: '220px' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData}>
+                    <defs>
+                      <linearGradient id="colorSleep" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.25}/>
+                        <stop offset="95%" stopColor="var(--primary)" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="colorEnergy" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="var(--info)" stopOpacity={0.25}/>
+                        <stop offset="95%" stopColor="var(--info)" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="date" stroke="rgba(255,255,255,0.3)" style={{ fontSize: '11px' }} axisLine={false} tickLine={false} />
+                    <YAxis stroke="rgba(255,255,255,0.3)" style={{ fontSize: '11px' }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ background: '#131520', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', fontFamily: 'var(--font-body)' }} />
+                    <Area type="monotone" dataKey="sleep" name="Sleep (Hrs)" stroke="var(--primary)" fillOpacity={1} fill="url(#colorSleep)" strokeWidth={2.5} />
+                    <Area type="monotone" dataKey="energy" name="Energy Level" stroke="var(--info)" fillOpacity={1} fill="url(#colorEnergy)" strokeWidth={2.5} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '220px', color: 'var(--text-muted)' }}>
+                No telemetry recorded. Log details using `/health`.
+              </div>
+            )}
           </div>
 
-          {/* Health metrics */}
-          <div className="term-status-block">
-            <div className="term-status-title">[HEALTH VAILS]</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px' }}>
-              <span>sleep (today)   : {healthLogs[0]?.sleep_duration ? `${healthLogs[0].sleep_duration} hrs` : '—'}</span>
-              <span>hydration       : {healthLogs[0]?.water_intake ? `${healthLogs[0].water_intake} units` : '0'}</span>
-              <span>body weight     : {healthLogs[0]?.weight ? `${healthLogs[0].weight} kg` : '—'}</span>
-              <span>energy levels   : {healthLogs[0]?.energy_level ? `${healthLogs[0].energy_level}/5` : '—'}</span>
-            </div>
-          </div>
-
-          {/* Academic metrics */}
-          <div className="term-status-block">
-            <div className="term-status-title">[ACADEMIC LOGS]</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px' }}>
-              <span>active term     : {activeSemester?.name || 'none'}</span>
-              {activeSemester?.courses?.map((c: any) => (
-                <span key={c.id} style={{ paddingLeft: '8px' }}>
-                  • {c.name.padEnd(16)} : grade {c.current_grade !== null ? `${c.current_grade}%` : '—'}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          {/* Relations metrics */}
-          <div className="term-status-block">
-            <div className="term-status-title">[CRM URGENCY LOG]</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '12px' }}>
-              {relations.length > 0 ? (
-                relations.map((r) => {
-                  const days = r.last_contact_date ? Math.floor((new Date().getTime() - new Date(r.last_contact_date).getTime()) / (1000 * 3600 * 24)) : 999;
-                  const overdue = days > r.contact_interval_days;
-                  return (
-                    <span key={r.id} style={{ color: overdue ? '#f59e0b' : '#c0caf5', paddingLeft: '8px' }}>
-                      • {r.name.padEnd(14)} : contacted {days === 999 ? 'never' : `${days}d ago`} (threshold: {r.contact_interval_days}d)
-                    </span>
-                  );
-                })
+          {/* Clean Activity Feed Stream */}
+          <div className="glass-panel" style={{ padding: '24px' }}>
+            <h3 style={{ fontSize: '16px', marginBottom: '20px', fontFamily: 'var(--font-display)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Clock size={18} style={{ color: 'var(--info)' }} />
+              Recent Logs Stream
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '400px', overflowY: 'auto' }}>
+              {financeLogs.length > 0 || healthLogs.length > 0 ? (
+                <>
+                  {financeLogs.map((log: any) => (
+                    <div key={`fin-${log.id}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '12px' }}>
+                      <div style={{ display: 'flex', gap: '12px' }}>
+                        <div style={{ background: log.transaction_type === 'income' ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)', color: log.transaction_type === 'income' ? '#10b981' : '#ef4444', padding: '6px', borderRadius: '8px', height: 'fit-content' }}>
+                          <DollarSign size={15} />
+                        </div>
+                        <div>
+                          <span style={{ display: 'block', fontSize: '13px', fontWeight: 600 }}>
+                            {log.transaction_type === 'income' ? 'Received Income' : `Spent on ${log.category}`}
+                          </span>
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                            ₹{log.amount.toLocaleString()} {log.description ? `• ${log.description}` : ''}
+                          </span>
+                        </div>
+                      </div>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{getRelativeTime(log.logged_at)}</span>
+                    </div>
+                  ))}
+                  {healthLogs.slice(0, 5).map((log: any) => (
+                    <div key={`hlt-${log.id}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '12px' }}>
+                      <div style={{ display: 'flex', gap: '12px' }}>
+                        <div style={{ background: 'rgba(99, 102, 241, 0.08)', color: 'var(--primary)', padding: '6px', borderRadius: '8px', height: 'fit-content' }}>
+                          <Heart size={15} />
+                        </div>
+                        <div>
+                          <span style={{ display: 'block', fontSize: '13px', fontWeight: 600 }}>Daily Telemetry Logged</span>
+                          <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                            {log.sleep_duration ? `${log.sleep_duration} hrs sleep ` : ''}
+                            {log.water_intake ? `• ${log.water_intake} glasses water ` : ''}
+                            {log.energy_level ? `• Energy: ${log.energy_level}/5 ` : ''}
+                          </span>
+                        </div>
+                      </div>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{getRelativeTime(log.created_at)}</span>
+                    </div>
+                  ))}
+                </>
               ) : (
-                <span>no CRM listings configured.</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', padding: '24px 0' }}>No logs recorded yet.</span>
               )}
             </div>
           </div>
 
         </div>
-      )}
+
+        {/* Right Side: CRM overdue, Milestones, and Notes */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+          
+          {/* Milestones / Deadlines */}
+          <div className="glass-panel" style={{ padding: '24px' }}>
+            <h3 style={{ fontSize: '16px', marginBottom: '20px', fontFamily: 'var(--font-display)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Calendar size={18} style={{ color: 'var(--info)' }} />
+              Academic Countdown
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {pendingAssignments.length > 0 ? (
+                pendingAssignments.map((a: any) => {
+                  const daysRemaining = a.due_date ? Math.ceil((new Date(a.due_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : null;
+                  return (
+                    <div key={a.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'rgba(255, 255, 255, 0.015)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: '10px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', maxWidth: '70%' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.title}</span>
+                        <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Term deadline</span>
+                      </div>
+                      <span style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        padding: '4px 8px',
+                        borderRadius: '6px',
+                        background: daysRemaining !== null && daysRemaining <= 2 ? 'var(--error-glow)' : 'var(--info-glow)',
+                        color: daysRemaining !== null && daysRemaining <= 2 ? 'var(--error)' : 'var(--info)'
+                      }}>
+                        {daysRemaining !== null ? (daysRemaining <= 0 ? 'Today' : `${daysRemaining}d`) : 'No date'}
+                      </span>
+                    </div>
+                  );
+                })
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '24px 0', gap: '8px', color: 'var(--text-muted)', fontSize: '12px' }}>
+                  <AlertCircle size={18} />
+                  <span>All tasks cleared.</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* CRM Overdue lists */}
+          <div className="glass-panel" style={{ padding: '24px' }}>
+            <h3 style={{ fontSize: '16px', marginBottom: '20px', fontFamily: 'var(--font-display)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Users size={18} style={{ color: 'var(--warning)' }} />
+              Inner Circle Alerts
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {relations.length > 0 ? (
+                relations.slice(0, 4).map((r: any) => {
+                  const days = r.last_contact_date ? Math.floor((new Date().getTime() - new Date(r.last_contact_date).getTime()) / (1000 * 3600 * 24)) : 999;
+                  const overdue = days > r.contact_interval_days;
+                  return (
+                    <div key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: '10px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 600 }}>{r.name}</span>
+                        <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Target: every {r.contact_interval_days}d</span>
+                      </div>
+                      <span style={{
+                        fontSize: '11px',
+                        fontWeight: overdue ? 700 : 500,
+                        padding: '4px 8px',
+                        borderRadius: '6px',
+                        background: overdue ? 'var(--warning-glow)' : 'rgba(255,255,255,0.03)',
+                        color: overdue ? 'var(--warning)' : 'var(--text-secondary)'
+                      }}>
+                        {days === 999 ? 'No contact log' : `${days}d ago`}
+                      </span>
+                    </div>
+                  );
+                })
+              ) : (
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', padding: '24px 0' }}>No relations logged.</span>
+              )}
+            </div>
+          </div>
+
+          {/* Wiki Notes Deck */}
+          <div className="glass-panel" style={{ padding: '24px' }}>
+            <h3 style={{ fontSize: '16px', marginBottom: '20px', fontFamily: 'var(--font-display)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <BookMarked size={18} style={{ color: 'var(--primary)' }} />
+              Knowledge Cards
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {notes.length > 0 ? (
+                notes.slice(0, 3).map((n: any) => (
+                  <div key={n.id} style={{ padding: '12px', background: 'rgba(255, 255, 255, 0.015)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                      <FileText size={14} style={{ color: 'var(--primary)' }} />
+                      <span style={{ fontSize: '13px', fontWeight: 600 }}>{n.title}</span>
+                    </div>
+                    <p style={{ fontSize: '11px', color: 'var(--text-secondary)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {n.content || 'Empty note content'}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', padding: '24px 0' }}>No notes found.</span>
+              )}
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
     </div>
   );
 };
