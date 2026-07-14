@@ -161,3 +161,72 @@ h1, h2, h3, h4, h5, h6 {
 .pulse-glow {
   animation: pulseGlow 3s infinite;
 }
+
+/* Responsive Grid & Containers */
+.app-container {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+}
+
+.responsive-grid-main {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 32px;
+}
+
+.responsive-grid-sub {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+}
+
+/* Responsive Screen Queries */
+@media (max-width: 1024px) {
+  .responsive-grid-main {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+}
+
+@media (max-width: 768px) {
+  .responsive-grid-sub {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-container {
+    padding: 16px 12px 60px;
+    gap: 20px;
+  }
+  
+  header {
+    flex-direction: column;
+    gap: 16px;
+    align-items: flex-start !important;
+    padding: 16px 20px !important;
+    margin-bottom: 24px !important;
+  }
+  
+  .glass-panel {
+    padding: 16px !important;
+    border-radius: 14px !important;
+  }
+  
+  .kpi-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+

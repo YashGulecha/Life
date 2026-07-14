@@ -94,7 +94,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, email }) => {
   }
 
   return (
-    <div style={{ maxWidth: '1440px', margin: '0 auto', padding: '40px 24px 80px' }}>
+    <div className="app-container">
       
       {/* Header bar */}
       <header className="glass-panel" style={{
@@ -148,17 +148,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, email }) => {
       </header>
 
       {/* Main Grid Layout */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
         
         {/* CLI Core Bar */}
         <CommandBar onCommandExecuted={fetchDashboardData} />
 
         {/* 4 Column KPI Panel */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-          gap: '24px'
-        }}>
+        <div className="kpi-grid">
           
           {/* Finance Overview Card */}
           <div className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
@@ -289,12 +284,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, email }) => {
         </div>
 
         {/* Dynamic Telemetry Graph & Middle section */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '2fr 1fr',
-          gap: '32px',
-          flexWrap: 'wrap'
-        }}>
+        <div className="responsive-grid-main">
           
           {/* Vitals History Line chart */}
           <div className="glass-panel" style={{ padding: '28px', display: 'flex', flexDirection: 'column' }}>
@@ -369,12 +359,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, email }) => {
         </div>
 
         {/* CRM list and Wiki list */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: '32px',
-          flexWrap: 'wrap'
-        }}>
+        <div className="responsive-grid-sub">
           
           {/* Inner Circle / Relations CRM */}
           <div className="glass-panel" style={{ padding: '28px' }}>
@@ -434,8 +419,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLogout, email }) => {
           </div>
 
         </div>
-
-      </div>
 
       {/* Embedded Spin Keyframes */}
       <style>{`
