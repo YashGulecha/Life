@@ -10,7 +10,7 @@ if os.path.exists(env_path):
                 key, val = line.split("=", 1)
                 os.environ[key.strip()] = val.strip()
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/life.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:////app/data/life.db")
 JWT_SECRET = os.getenv("JWT_SECRET", "super-secret-key-change-in-production")
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
