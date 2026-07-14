@@ -13,9 +13,17 @@ app = FastAPI(
 )
 
 # Enable CORS for frontend and native shell app bindings
+origins = [
+    "https://life.yashgulecha.in",
+    "http://localhost",
+    "https://localhost",
+    "http://localhost:3000",
+    "capacitor://localhost",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Allowed for local development/native app shells. Secure cookies handle authentication safety.
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
