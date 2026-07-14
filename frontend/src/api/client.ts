@@ -25,4 +25,17 @@ client.interceptors.request.use((config) => {
   return Promise.reject(error);
 });
 
+// Response interceptor to catch 401 Unauthorized errors and force logout
+client.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('user_email');
+      window.location.reload();
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default client;
